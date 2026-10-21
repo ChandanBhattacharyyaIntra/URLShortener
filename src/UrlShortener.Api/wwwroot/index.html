@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agentic URL Shortener</title>
+  <style>
+    :root {
+      --navy: #003b5c;
+      --teal: #00a0df;
+      --paper: #f4f7fa;
+      --ink: #1b2430;
+      --muted: #5c6b7a;
+      --card: #fff;
+      --ok: #1f8a4c;
+      --wait: #c47b12;
+      --bad: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--paper); color: var(--ink); }
+    header { background: var(--navy); color: #fff; padding: 20px 28px; }
+    header h1 { margin: 0 0 6px; font-size: 22px; }
+    header p { margin: 0; opacity: .85; font-size: 14px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; }
+    @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
+    section { background: var(--card); border-radius: 12px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    h2 { margin: 0 0 12px; font-size: 16px; color: var(--navy); }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+    input, select { width: 100%; padding: 8px 10px; border: 1px solid #cfd8e3; border-radius: 8px; }
+    button { background: var(--navy); color: #fff; border: 0; border-radius: 8px; padding: 9px 14px; margin-top: 10px; cursor: pointer; }
+    button.secondary { background: var(--teal); }
+    button.danger { background: var(--bad); }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; color: #fff; }
+    .ok { background: var(--ok); } .wait { background: var(--wait); } .bad { background: var(--bad); } .idle { background: #7a8794; }
+    pre { background: #0f2533; color: #d6eeff; padding: 12px; border-radius: 8px; overflow: auto; max-height: 280px; font-size: 12px; }
+    .node { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eef2f6; }
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+    .metric { background: #eef6fb; padding: 8px; border-radius: 8px; font-size: 12px; }
+    .metric b { display: block; font-size: 16px; color: var(--navy); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Agentic URL Shortener</h1>
+    <p>ASP.NET Core prototype — short links, analytics, and an SDLC orchestrator with gates, approvals, and lineage. <a href="/guide.html" style="color:#9fe3ff">Architecture &amp; API guide</a></p>
+  </header>
+  <main>
+    <section>
+      <h2>Shorten a URL</h2>
+      <label>Long URL</label>
+      <input id="url" placeholder="https://example.com/path" />
+      <label>Custom alias (optional)</label>
+      <input id="alias" placeholder="campaign-q4" />
+      <label>Expires in seconds (optional)</label>
+      <input id="exp" type="number" min="1" placeholder="86400" />
+      <div class="row">
+        <button onclick="shorten()">Create</button>
+        <button class="secondary" onclick="loadList()">Refresh list</button>
+      </div>
+      <pre id="shortOut">Ready.</pre>
+    </section>
+    <section>
+      <h2>Orchestrator scenarios</h2>
+      <label>Scenario</label>
+      <select id="scenario">
+        <option value="greenfield">Greenfield — new shortener</option>
+        <option value="brownfield">Brownfield — deactivate / impact</option>
+        <option value="ambiguous">Ambiguous — “like bit.ly”</option>
+      </select>
+      <label>Approval mode</label>
+      <select id="mode">
+        <option value="auto">Auto (unattended demo)</option>
+        <option value="manual">Manual (human gates)</option>
+      </select>
+      <div class="row">
+        <button onclick="runScenario()">Run SDLC</button>
+        <button class="secondary" onclick="approve(true)">Approve</button>
+        <button class="danger" onclick="stopRun()">Safe-stop</button>
+      </div>
+      <div class="metrics" id="metrics"></div>
+      <div id="nodes"></div>
+      <pre id="orchOut">No run yet.</pre>
+    </section>
+  </main>
+  <script>
+    let currentRun = null;
+
+    async function shorten() {
+      const body = { url: document.getElementById('url').value, customAlias: document.getElementById('alias').value || undefined };
+      const exp = document.getElementById('exp').value;
+      if (exp) body.expiresInSeconds = Number(exp);
+      const res = await fetch('/api/urls', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      document.getElementById('shortOut').textContent = JSON.stringify(await res.json(), null, 2);
+      loadList();
+    }
+
+    async function loadList() {
+      const res = await fetch('/api/urls');
+      const data = await res.json();
+      document.getElementById('shortOut').textContent = JSON.stringify(data, null, 2);
+    }
+
+    function pill(status) {
+      const s = String(status || '').toLowerCase();
+      const cls = s.includes('succeed') ? 'ok' : s.includes('fail') || s.includes('rolled') || s.includes('block') ? 'bad' : s.includes('await') || s.includes('run') ? 'wait' : 'idle';
+      return `<span class="pill ${cls}">${status}</span>`;
+    }
+
+    function render(run) {
+      currentRun = run;
+      const m = run.metrics || {};
+      document.getElementById('metrics').innerHTML = `
+        <div class="metric"><b>${run.status}</b>status</div>
+        <div class="metric"><b>${((m.successRate || 0) * 100).toFixed(0)}%</b>success</div>
+        <div class="metric"><b>${m.endToEndLatencyMs ?? '—'}</b>e2e ms</div>
+        <div class="metric"><b>${m.retryCount ?? 0}</b>retries</div>
+        <div class="metric"><b>${m.rollbackCount ?? 0}</b>rollbacks</div>
+        <div class="metric"><b>${m.mttrMs ?? '—'}</b>MTTR ms</div>`;
+      const nodes = Object.values(run.nodes || {}).sort((a, b) => (a.def.id > b.def.id ? 1 : -1));
+      document.getElementById('nodes').innerHTML = nodes.map(n =>
+        `<div class="node"><span>${n.def.id}${n.def.requiresApproval ? ' ⚑' : ''}${n.def.parallelGroup ? ' ∥ ' + n.def.parallelGroup : ''}</span>${pill(n.status)}</div>`
+      ).join('');
+      document.getElementById('orchOut').textContent = JSON.stringify({
+        id: run.id, scenario: run.scenario, pendingApproval: run.pendingApproval,
+        lineage: (run.lineage || []).map(d => d.summary),
+        ambiguities: run.artifacts?.find(a => a.kind === 'spec')?.body?.ambiguities
+      }, null, 2);
+    }
+
+    async function poll(id) {
+      const res = await fetch('/api/orchestrator/runs/' + id);
+      const run = await res.json();
+      render(run);
+      if (run.status === 'running' || run.status === 'awaiting_approval') setTimeout(() => poll(id), 400);
+    }
+
+    async function runScenario() {
+      const res = await fetch('/api/orchestrator/runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scenario: document.getElementById('scenario').value,
+          approvalMode: document.getElementById('mode').value
+        })
+      });
+      const run = await res.json();
+      render(run);
+      if (run.status === 'running' || run.status === 'awaiting_approval') poll(run.id);
+    }
+
+    async function approve(ok) {
+      if (!currentRun) return;
+      await fetch('/api/orchestrator/runs/' + currentRun.id + '/approve', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved: ok, note: 'dashboard' })
+      });
+      poll(currentRun.id);
+    }
+
+    async function stopRun() {
+      if (!currentRun) return;
+      const res = await fetch('/api/orchestrator/runs/' + currentRun.id + '/stop', { method: 'POST' });
+      render(await res.json());
+    }
+
+    loadList().catch(() => {});
+  </script>
+</body>
+</html>

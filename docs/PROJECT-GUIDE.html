@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agentic URL Shortener — Architecture, API Guide, and Problem Mapping</title>
+  <style>
+    :root {
+      --navy: #003b5c;
+      --navy-2: #0a4a70;
+      --teal: #0088c2;
+      --ink: #1c2430;
+      --muted: #5a6876;
+      --line: #d7e1ea;
+      --paper: #f6f8fb;
+      --card: #ffffff;
+      --ok: #1b7a45;
+      --warn: #9a6b12;
+      --code: #0e2433;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Calibri, system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.55;
+    }
+    header.hero {
+      background: linear-gradient(135deg, var(--navy) 0%, #065a86 100%);
+      color: #fff;
+      padding: 40px 32px 32px;
+    }
+    header.hero h1 { margin: 0 0 8px; font-size: 28px; font-weight: 650; }
+    header.hero p { margin: 0; max-width: 920px; opacity: .92; }
+    .meta { margin-top: 14px; font-size: 13px; opacity: .8; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 72px; }
+    nav.toc {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin: -28px 20px 28px;
+      max-width: 1080px;
+      margin-left: auto;
+      margin-right: auto;
+      position: relative;
+      box-shadow: 0 8px 24px rgba(0, 40, 70, .08);
+    }
+    nav.toc h2 { margin: 0 0 10px; font-size: 14px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+    nav.toc ol { margin: 0; padding-left: 18px; columns: 2; gap: 24px; }
+    nav.toc a { color: var(--navy); text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+    @media (max-width: 720px) { nav.toc ol { columns: 1; } }
+    h2 { color: var(--navy); border-bottom: 2px solid var(--line); padding-bottom: 6px; margin-top: 40px; }
+    h3 { color: var(--navy-2); margin-top: 24px; }
+    p, li { font-size: 15.5px; }
+    .muted { color: var(--muted); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px 18px;
+    }
+    table { width: 100%; border-collapse: collapse; background: var(--card); font-size: 14px; }
+    th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #e8f2f8; color: var(--navy); }
+    code, kbd { font-family: Consolas, "Cascadia Mono", monospace; font-size: 13px; }
+    kbd { background: #eef3f7; border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
+    pre {
+      background: var(--code);
+      color: #d9eefc;
+      padding: 14px 16px;
+      border-radius: 10px;
+      overflow: auto;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .diagram {
+      background: #102433;
+      color: #cfe8f7;
+      font-family: Consolas, monospace;
+      font-size: 12.5px;
+      padding: 16px;
+      border-radius: 10px;
+      overflow: auto;
+      white-space: pre;
+      line-height: 1.35;
+    }
+    .pill { display: inline-block; background: #d7eef8; color: var(--navy); border-radius: 999px; padding: 2px 8px; font-size: 12px; }
+    .ok { color: var(--ok); font-weight: 600; }
+    .warn { color: var(--warn); }
+    footer { margin-top: 48px; color: var(--muted); font-size: 13px; }
+    .req { background: #fff; border-left: 4px solid var(--teal); padding: 10px 14px; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <h1>Agentic URL Shortener</h1>
+    <p>
+      Detailed architecture, API usage, engineering practices, and how this prototype
+      satisfies the Schwab / Mindlance assignment: <em>Build an Agentic Software Engineering System — URL Shortener</em>.
+    </p>
+    <div class="meta">ASP.NET Core 8 · Visual Studio 2022 · Local demo on http://localhost:5169</div>
+  </header>
+
+  <nav class="toc wrap" style="margin-top:-20px; padding:16px 20px;">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#problem">Problem statement</a></li>
+      <li><a href="#solution">How the solution maps to the assignment</a></li>
+      <li><a href="#architecture">System architecture</a></li>
+      <li><a href="#data-plane">Data plane (URL shortener)</a></li>
+      <li><a href="#control-plane">Control plane (orchestrator)</a></li>
+      <li><a href="#scenarios">Three scenarios</a></li>
+      <li><a href="#run">How to run</a></li>
+      <li><a href="#api-shortener">URL shortener API</a></li>
+      <li><a href="#api-orch">Orchestrator API</a></li>
+      <li><a href="#practices">Best practices used</a></li>
+      <li><a href="#risks">Risks, trade-offs, limitations</a></li>
+      <li><a href="#walkthrough">End-to-end walkthrough</a></li>
+    </ol>
+  </nav>
+
+  <div class="wrap">
+    <h2 id="problem">1. Problem statement</h2>
+    <p>
+      The interview assignment is not “write a URL shortener.” It is to build a <strong>working prototype that turns a requirement into a reviewable engineering outcome using an agentic execution model</strong>.
+      The product scenario is a URL shortener with core APIs, analytics, and reliability. The evaluation weight sits on <strong>orchestration quality</strong>, architecture, decomposition, validation, and engineering judgment.
+    </p>
+    <div class="req"><strong>Principle from the PDF:</strong> agents execute under defined autonomy boundaries; humans own oversight, approvals, and final quality.</div>
+    <p>Required capabilities:</p>
+    <ul>
+      <li>Requirement understanding (including ambiguous input)</li>
+      <li>Task decomposition with dependencies and sequencing</li>
+      <li>Brownfield codebase reasoning (impacted modules and data flows)</li>
+      <li>Workflow orchestration that is <strong>not</strong> a linear task list: DAG, gates, parallel/sync, lineage, human checkpoints, retries, fallback/rollback, safe-stop, policy guardrails, audit, reliability metrics, dynamic replan</li>
+      <li>Production-quality code, tests, and documentation</li>
+      <li>A final engineering summary of plan, artifacts, risks, assumptions, and limits</li>
+    </ul>
+    <p>Deliverables: runnable prototype, architecture overview, three scenarios (greenfield, brownfield, ambiguous), setup, testing approach, limitations, and trade-offs.</p>
+
+    <h2 id="solution">2. How this prototype solves that problem</h2>
+    <p>
+      The system is split into two planes that share one ASP.NET Core host so a reviewer can run everything with <code>dotnet run</code>:
+    </p>
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin-top:0">Data plane — engineering output</h3>
+        <p>A real URL shortener: create, redirect, analytics, expiration, custom aliases, deactivate, validation, rate limits, health/metrics. This proves the “working prototype” and “production-quality APIs” parts of the rubric.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Control plane — agentic SDLC</h3>
+        <p>An orchestrator that executes a <strong>dependency graph</strong> of SDLC stages with entry/exit gates, parallel build paths, sync joins, human approvals, retries, rollback, safe-stop, policy checks, audit events, and reliability metrics. This is the critical differentiator.</p>
+      </div>
+    </div>
+    <p>
+      Stage workers are deterministic (no LLM API key required) behind a single <code>StageAgents.Run(node, context, prior)</code> interface.
+      That is intentional: the assignment grades <strong>governance and orchestration</strong>, not vendor-chat wrapping.
+      An LLM can be plugged into the same interface later without rewriting the DAG, gates, or audit model.
+    </p>
+    <table>
+      <thead><tr><th>Assignment requirement</th><th>Where it is implemented</th></tr></thead>
+      <tbody>
+        <tr><td>Requirement understanding</td><td><code>requirements</code> stage + <code>ScenarioCatalog</code> (especially ambiguous)</td></tr>
+        <tr><td>Task decomposition / sequencing</td><td><code>SdlcGraph</code> nodes, <code>DependsOn</code>, topological layers</td></tr>
+        <tr><td>Brownfield reasoning</td><td>Brownfield scenario impact map of <code>Shortener/</code> modules</td></tr>
+        <tr><td>Non-linear orchestration</td><td>Parallel <code>implementation ∥ test_planning</code>; sync join into <code>testing</code></td></tr>
+        <tr><td>Entry/exit gates</td><td>Per-node <code>EntryGates</code> / <code>ExitGates</code> in the audit stream</td></tr>
+        <tr><td>Human approval</td><td>Architecture and release nodes; <code>approvalMode=manual</code></td></tr>
+        <tr><td>Retries / rollback / safe-stop</td><td><code>RetryPolicy</code>, <code>RolledBack</code> status, <code>POST .../stop</code></td></tr>
+        <tr><td>Policy guardrails</td><td><code>Policies.Evaluate</code> (no secrets in artifacts; dangerous-change flags)</td></tr>
+        <tr><td>Audit / lineage / metrics</td><td>Run events, decisions, artifacts; success rate, retries, rollbacks, MTTR, e2e latency</td></tr>
+        <tr><td>Dynamic replan</td><td><code>POST /api/orchestrator/runs/{id}/replan</code></td></tr>
+        <tr><td>Tests + docs + summary</td><td><code>dotnet test</code>, this guide, <code>docs/ARCHITECTURE.md</code>, <code>docs/ENGINEERING_SUMMARY.md</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="architecture">3. System architecture</h2>
+    <div class="diagram">┌─────────────────────────────────────────────────────────────────┐
+│  Dashboard  wwwroot/index.html                                  │
+│  Human oversight: shorten URLs, run scenarios, approve, stop    │
+└───────────────┬───────────────────────────────┬─────────────────┘
+                │ HTTP                          │ HTTP
+        /api/urls  /{code}              /api/orchestrator/*
+                │                               │
+┌───────────────▼───────────────┐   ┌───────────▼────────────────┐
+│ DATA PLANE                    │   │ CONTROL PLANE              │
+│ ShortenerEndpoints            │   │ OrchestratorEndpoints      │
+│ UrlShortenerService           │   │ OrchestratorEngine         │
+│ UrlValidator / CodeGenerator  │   │ SdlcGraph + StageAgents    │
+│ RateLimitMiddleware           │   │ Policies + Metrics         │
+│ JsonUrlStore (atomic file)    │   │ ScenarioCatalog            │
+└───────────────────────────────┘   └────────────────────────────┘
+                │
+                ▼
+         data/store.json</div>
+    <p>
+      Hosting both planes in one process is a <strong>prototype constraint</strong> (easy local run).
+      Folders stay separated (<code>Shortener/</code> vs <code>Orchestrator/</code>) so a later split into two services is a packaging change, not a rewrite.
+    </p>
+    <h3>Solution layout</h3>
+    <pre>UrlShortener.sln
+src/UrlShortener.Api/          ASP.NET Core 8 web host
+  Program.cs                   DI, middleware, endpoint mapping
+  Shortener/                   URL product
+  Orchestrator/                SDLC engine
+  wwwroot/index.html           operator dashboard
+tests/UrlShortener.Tests/      xUnit + WebApplicationFactory
+docs/                          architecture, summary, this guide
+global.json                    pin SDK 8.x for Visual Studio</pre>
+
+    <h2 id="data-plane">4. Data plane — URL shortener</h2>
+    <p>Redirect is the hot path and is fail-closed:</p>
+    <ol>
+      <li>Look up code (404 if missing or reserved).</li>
+      <li>If inactive or past <code>expiresAt</code> → <strong>410 Gone</strong> (do not redirect).</li>
+      <li>Increment clicks, append a <code>ClickEvent</code> (referrer + user-agent).</li>
+      <li>Return <strong>302</strong> to the original URL (temporary redirect so analytics keep working if the target changes later).</li>
+    </ol>
+    <h3>Reliability and safety controls</h3>
+    <ul>
+      <li><strong>URL allow-list:</strong> only <code>http</code>/<code>https</code>; block <code>javascript:</code>, <code>data:</code>, <code>file:</code>, <code>vbscript:</code>.</li>
+      <li><strong>Alias rules:</strong> 3–32 chars, alphanumeric / <code>_</code> / <code>-</code>; reserved words (<code>api</code>, <code>health</code>, …) rejected.</li>
+      <li><strong>Collision handling:</strong> random 7-char base62 codes, max 5 retries, then 503.</li>
+      <li><strong>Rate limit:</strong> in-process token bucket (stricter on writes).</li>
+      <li><strong>Headers:</strong> <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code>.</li>
+      <li><strong>Persistence:</strong> JSON snapshot with temp-file + atomic replace (no native SQL driver on the interview laptop).</li>
+    </ul>
+
+    <h2 id="control-plane">5. Control plane — agentic orchestrator</h2>
+    <p>This is not a sequential script. Ready nodes whose dependencies are satisfied run together. Waves look like:</p>
+    <div class="diagram">requirements
+      ↓
+architecture  ⚑ human gate (change control)
+      ↓
+┌─────────────┴─────────────┐
+│ implementation            │  parallel group “build”
+│ test_planning             │
+└─────────────┬─────────────┘
+      ↓ sync join
+┌─────────────┴─────────────┐
+│ testing (needs both)      │  parallel group “verify”
+│ documentation (needs impl)│
+└─────────────┬─────────────┘
+      ↓
+release  ⚑ human gate (quality / go-no-go)</div>
+    <p>Each node records:</p>
+    <ul>
+      <li><span class="pill">entry gate</span> before work</li>
+      <li>bounded retries with backoff</li>
+      <li>policy evaluation on artifacts</li>
+      <li><span class="pill">exit gate</span> after success</li>
+      <li>decisions (lineage) and named artifacts (spec, ADR, evidence, test plan, checklist)</li>
+      <li>optional snapshot for rollback if a later attempt fails</li>
+    </ul>
+    <p>
+      <strong>Controlled autonomy:</strong> implementation, test planning, testing, and documentation run as agents.
+      Architecture and release wait for a human when <code>approvalMode=manual</code>.
+      <code>auto</code> is only for unattended tests/demos and is itself written into lineage so it is never a silent bypass.
+    </p>
+    <p>
+      <strong>Safe-stop</strong> sets a cooperative flag and completes a pending approval as denied so the engine cannot hang on a human gate.
+      <strong>Replan</strong> records that upstream output changed and resets unfinished nodes.
+    </p>
+
+    <h2 id="scenarios">6. Three required scenarios</h2>
+    <table>
+      <thead><tr><th>Scenario</th><th>Requirement input</th><th>What the run demonstrates</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>greenfield</strong></td>
+          <td>Build a shortener from scratch with APIs, analytics, expiration, aliases, reliability.</td>
+          <td>Full SDLC decomposition from a clear spec; implementation evidence against that spec.</td>
+        </tr>
+        <tr>
+          <td><strong>brownfield</strong></td>
+          <td>Service already in use; add deactivate without breaking analytics; 410 fail-closed.</td>
+          <td>Impacted modules, change-control approval before architecture, compatibility of redirect vs disable.</td>
+        </tr>
+        <tr>
+          <td><strong>ambiguous</strong></td>
+          <td>“Something like bit.ly. Make URLs better. Ship soon.”</td>
+          <td>Ambiguities listed (auth, SLA, alias policy, analytics TTL); explicit assumptions; MVP envelope (no SSO, JSON store, rate limits).</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>The ambiguous scenario <strong>does not invent hidden requirements</strong>. It records assumptions and proceeds only inside that envelope — that is the validation/risk-control behavior the rubric asks for.</p>
+
+    <h2 id="run">7. How to run</h2>
+    <p>Prerequisites: .NET 8 SDK and Visual Studio 2022 (17.8+) or the <code>dotnet</code> CLI. <code>global.json</code> pins SDK 8.x so Visual Studio does not try to target .NET 9.</p>
+    <pre>dotnet test
+dotnet run --project src/UrlShortener.Api</pre>
+    <p>Then open <a href="http://localhost:5169">http://localhost:5169</a> for the dashboard, or call the APIs below (PowerShell examples use port <strong>5169</strong> from <code>launchSettings.json</code>).</p>
+
+    <h2 id="api-shortener">8. URL shortener API</h2>
+    <p>JSON uses camelCase. Errors return <code>{ "error": "message" }</code> with the HTTP status below.</p>
+
+    <h3>POST /api/urls — create</h3>
+    <p>Body:</p>
+    <pre>{
+  "url": "https://example.com/campaign",
+  "customAlias": "q4-promo",
+  "expiresInSeconds": 86400,
+  "createdBy": "dashboard"
+}</pre>
+    <p><code>customAlias</code> and <code>expiresInSeconds</code> are optional. Success: <strong>201 Created</strong>.</p>
+    <pre>Invoke-RestMethod -Method Post -Uri http://localhost:5169/api/urls `
+  -ContentType application/json `
+  -Body '{"url":"https://example.com/campaign","customAlias":"q4-promo"}'</pre>
+    <table>
+      <thead><tr><th>Status</th><th>When</th></tr></thead>
+      <tbody>
+        <tr><td>201</td><td>Created; response includes <code>code</code> and <code>shortUrl</code></td></tr>
+        <tr><td>400</td><td>Missing/invalid URL, bad alias, bad expiry, blocked scheme</td></tr>
+        <tr><td>409</td><td>Custom alias already taken</td></tr>
+        <tr><td>429</td><td>Rate limit</td></tr>
+        <tr><td>503</td><td>Could not allocate a unique random code</td></tr>
+      </tbody>
+    </table>
+
+    <h3>GET /{code} — redirect</h3>
+    <p>302 to the original URL and records a click. Use a client that does not follow redirects if you want to inspect the Location header.</p>
+    <pre>curl -i http://localhost:5169/q4-promo</pre>
+    <table>
+      <thead><tr><th>Status</th><th>When</th></tr></thead>
+      <tbody>
+        <tr><td>302</td><td>Active, unexpired link</td></tr>
+        <tr><td>404</td><td>Unknown or reserved code</td></tr>
+        <tr><td>410</td><td>Disabled or expired (fail-closed; no redirect)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>GET /api/urls — list</h3>
+    <pre>Invoke-RestMethod http://localhost:5169/api/urls</pre>
+    <p>Returns <code>{ "items": [ ... ] }</code> newest first.</p>
+
+    <h3>GET /api/urls/{code} — metadata</h3>
+    <p>Code, original URL, timestamps, click count, active flag. Does <em>not</em> increment clicks (unlike GET /{code}).</p>
+
+    <h3>GET /api/urls/{code}/analytics</h3>
+    <p>Aggregates: total clicks, clicks by day, top referrers, last access, expiry, active flag.</p>
+    <pre>Invoke-RestMethod http://localhost:5169/api/urls/q4-promo/analytics</pre>
+
+    <h3>POST /api/urls/{code}/deactivate</h3>
+    <p>Sets <code>active=false</code>. Subsequent redirects return 410. Historical click events are kept (brownfield compatibility).</p>
+    <pre>Invoke-RestMethod -Method Post -Uri http://localhost:5169/api/urls/q4-promo/deactivate</pre>
+
+    <h3>GET /health and GET /metrics</h3>
+    <p>Liveness (<code>status</code>, uptime) and counters (url count, active count, total clicks). Suitable for a load-balancer probe in a later production hardening pass.</p>
+
+    <h2 id="api-orch">9. Orchestrator API</h2>
+
+    <h3>GET /api/orchestrator/graph</h3>
+    <p>Static DAG: node ids, dependencies, approval flags, parallel groups, gates, retry policy, plus topological <code>layers</code>. Use this to visualize the workflow without starting a run.</p>
+
+    <h3>POST /api/orchestrator/runs — start a scenario</h3>
+    <pre>{
+  "scenario": "greenfield",
+  "approvalMode": "auto"
+}</pre>
+    <p><code>scenario</code>: <code>greenfield</code> | <code>brownfield</code> | <code>ambiguous</code>. <code>approvalMode</code>: <code>auto</code> | <code>manual</code>.</p>
+    <ul>
+      <li><code>auto</code> waits until the run settles and returns <strong>201</strong> with the full run (lineage, artifacts, metrics, events).</li>
+      <li><code>manual</code> returns <strong>202</strong> immediately; poll GET until <code>status</code> is <code>awaiting_approval</code>, then approve.</li>
+    </ul>
+    <pre>Invoke-RestMethod -Method Post -Uri http://localhost:5169/api/orchestrator/runs `
+  -ContentType application/json `
+  -Body '{"scenario":"ambiguous","approvalMode":"auto"}'</pre>
+
+    <h3>GET /api/orchestrator/runs and GET .../runs/{id}</h3>
+    <p>List or fetch one run. Important fields:</p>
+    <ul>
+      <li><code>status</code> — running | awaiting_approval | succeeded | failed | stopped</li>
+      <li><code>nodes</code> — per-stage status, attempts, errors</li>
+      <li><code>lineage</code> — decisions (who decided what and why)</li>
+      <li><code>artifacts</code> — spec, ADR, evidence, test plan, docs index, release checklist</li>
+      <li><code>events</code> — audit: gates, parallel waves, retries, approvals</li>
+      <li><code>metrics</code> — successRate, retryCount, rollbackCount, mttrMs, endToEndLatencyMs</li>
+      <li><code>pendingApproval</code> — node id + reason when blocked on a human</li>
+    </ul>
+
+    <h3>POST /api/orchestrator/runs/{id}/approve</h3>
+    <pre>{ "approved": true, "note": "ADR accepted; schema freeze" }</pre>
+    <p>409 if nothing is waiting. Use <code>approved: false</code> to fail the gated node (and therefore the run).</p>
+
+    <h3>POST /api/orchestrator/runs/{id}/stop</h3>
+    <p>Cooperative safe-stop. Unfinished nodes become <code>stopped</code>.</p>
+
+    <h3>POST /api/orchestrator/runs/{id}/replan</h3>
+    <pre>{ "reason": "Product owner changed analytics retention" }</pre>
+    <p>Records lineage that upstream output changed and resets unfinished nodes. Intended to show governance when requirements move mid-run.</p>
+
+    <h2 id="practices">10. Best practices used</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin-top:0">Design</h3>
+        <ul>
+          <li>Clear bounded context split (shortener vs orchestrator).</li>
+          <li>Domain logic in a service, not in HTTP handlers.</li>
+          <li>Immutable records for URL/click snapshots; updates via <code>with</code>.</li>
+          <li>Fail closed on security and expiry (410, not a best-effort redirect).</li>
+          <li>DAG as data, not hardcoded <code>if</code> chains — sequencing is inspectable.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">API &amp; HTTP</h3>
+        <ul>
+          <li>Correct status codes: 201, 302, 400, 404, 409, 410, 429, 503.</li>
+          <li>Create vs resolve vs inspect are different verbs/paths so analytics are not polluted by metadata reads.</li>
+          <li>Temporary 302 rather than 301 so caches do not pin a target forever.</li>
+          <li>Consistent error envelope <code>{ error }</code>.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Security &amp; change control</h3>
+        <ul>
+          <li>Scheme allow-list against open redirects / XSS-style payloads.</li>
+          <li>Rate limiting on writes.</li>
+          <li>Baseline security headers.</li>
+          <li>Human gates on high-impact stages (architecture, release).</li>
+          <li>Policy scan so artifacts cannot casually contain secrets.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Reliability &amp; testability</h3>
+        <ul>
+          <li>Bounded collision retries; no infinite allocate loops.</li>
+          <li>Atomic file persist.</li>
+          <li>Isolated temp store in <code>WebApplicationFactory</code> tests.</li>
+          <li>Nine automated tests covering happy path, negative path, and all three orchestrator scenarios.</li>
+          <li>Health/metrics as the start of operability.</li>
+        </ul>
+      </div>
+    </div>
+    <p>
+      SDLC best practice in the orchestrator itself: <strong>test planning is parallel to implementation</strong>, then testing <strong>joins</strong> both.
+      That matches real teams (QA does not wait for every line of code) and is the “parallel paths with synchronization” the assignment called out.
+    </p>
+
+    <h2 id="risks">11. Risks, trade-offs, limitations</h2>
+    <table>
+      <thead><tr><th>Choice</th><th>Benefit</th><th>Cost / limit</th></tr></thead>
+      <tbody>
+        <tr><td>JSON file store</td><td>Zero infra, Windows-friendly</td><td>Not HA; not multi-writer safe</td></tr>
+        <tr><td>In-memory rate limit</td><td>Simple, no Redis</td><td>Per-process only</td></tr>
+        <tr><td>Deterministic stage agents</td><td>Runnable without secrets; tests are stable</td><td>Not a live LLM coder; interface is the extension point</td></tr>
+        <tr><td>Single ASP.NET process</td><td>One-command demo</td><td>Control and data planes share fate; split later if needed</td></tr>
+        <tr><td>Auto-approve mode</td><td>CI and unattended demo</td><td>Must stay explicit in lineage (it is)</td></tr>
+        <tr><td>No SSO / no SQL</td><td>Fits a 2–3 day prototype</td><td>Out of scope; listed as assumptions</td></tr>
+      </tbody>
+    </table>
+    <p class="warn">Dashboard UI is not covered by dedicated UI tests; API tests are the system of record. Replan does not auto-restart a finished run.</p>
+
+    <h2 id="walkthrough">12. Suggested reviewer walkthrough</h2>
+    <ol>
+      <li>Open this file plus <code>docs/ENGINEERING_SUMMARY.md</code> for plan, assumptions, and limits.</li>
+      <li><code>dotnet test</code> — expect 9 passing tests.</li>
+      <li>Run the API; open the dashboard at <code>/</code>.</li>
+      <li>Create a link, open <code>/{code}</code>, then inspect <code>/api/urls/{code}/analytics</code>.</li>
+      <li>Deactivate the same code; confirm 410.</li>
+      <li>POST orchestrator run <code>greenfield</code> / <code>auto</code>; confirm seven succeeded nodes, gate events, and metrics.</li>
+      <li>POST <code>brownfield</code>; read the ADR artifact’s impacted modules.</li>
+      <li>POST <code>ambiguous</code>; read ambiguities and assumptions on the requirements artifact.</li>
+      <li>Optional: <code>approvalMode=manual</code>, approve architecture, then approve release — that is the human-in-the-loop story.</li>
+    </ol>
+    <p>
+      That path covers the PDF’s deliverables: a runnable prototype, architecture, three scenarios, setup, testing, and defensible trade-offs —
+      with agents executing work and humans remaining accountable for high-impact decisions.
+    </p>
+
+    <footer>
+      Agentic URL Shortener · interview prototype · not a production deployment package.
+      Related files: README.md, docs/ARCHITECTURE.md, docs/ENGINEERING_SUMMARY.md.
+    </footer>
+  </div>
+</body>
+</html>

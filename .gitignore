@@ -1,0 +1,12 @@
+bin/
+obj/
+data/
+*.user
+*.suo
+.vs/
+.idea/
+node_modules/
+dist/
+artifacts/runs/
+*.log
+.DS_Store
